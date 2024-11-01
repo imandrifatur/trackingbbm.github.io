@@ -39,8 +39,8 @@
         <h2>Pelacakan Tangki BBM Truk</h2>
         <form id="tankForm">
             <div class="form-group">
-                <label for="truckId">ID Truk</label>
-                <input type="text" id="truckId" class="form-control" placeholder="Masukkan ID Truk" required>
+                <label for="truckId">Nomor Polisi</label>
+                <input type="text" id="truckId" class="form-control" placeholder="Masukkan Nomor Polisi Truk" required>
             </div>
             <div class="form-group">
                 <label for="fuelAmount">Jumlah BBM (Liter)</label>
@@ -81,6 +81,7 @@
         let totalFuelConsumed = 0;
         let map;
         let marker;
+        let intervalId;
 
         // Fungsi untuk menyimpan data ke localStorage
         function saveData() {
@@ -186,14 +187,37 @@
             map.setView([latitude, longitude], 15);
         }
 
+        // Fungsi untuk mendapatkan lokasi saat ini
+        function getCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(updateLocation, (error) => {
+                    console.error(error);
+                }, {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 10000
+                });
+            } else {
+                alert("Geolocation tidak didukung oleh browser ini.");
+            }
+        }
+
         // Fungsi untuk mulai melacak lokasi
         function startTracking() {
             if (navigator.geolocation) {
-                map = L.map('map').setView([0, 0], 2); // Set peta ke default view
+                map = L.map('map').setView([0, 0], 2); // Atur peta ke tampilan awal
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19,
                     attribution: '© OpenStreetMap'
                 }).addTo(map);
+
+                // Mengambil lokasi pertama
+                getCurrentLocation();
+                
+                // Memperbarui lokasi setiap 24 jam
+                intervalId = setInterval(() => {
+                    getCurrentLocation();
+                }, 86400000); // 24 jam dalam milidetik
 
                 watchId = navigator.geolocation.watchPosition(updateLocation, (error) => {
                     console.error(error);
@@ -212,13 +236,17 @@
             if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
                 watchId = null;
-                lastPosition = null;
-                totalDistance = 0;
-                totalFuelConsumed = 0;
-                document.getElementById('distanceInfo').textContent = 'Jarak Ditempuh: 0 km';
-                document.getElementById('speedInfo').textContent = 'Kecepatan: 0 km/jam';
-                document.getElementById('fuelInfo').textContent = 'Konsumsi BBM: 0 liter';
             }
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+            lastPosition = null;
+            totalDistance = 0;
+            totalFuelConsumed = 0;
+            document.getElementById('distanceInfo').textContent = 'Jarak Ditempuh: 0 km';
+            document.getElementById('speedInfo').textContent = 'Kecepatan: 0 km/jam';
+            document.getElementById('fuelInfo').textContent = 'Konsumsi BBM: 0 liter';
         }
 
         // Menampilkan data dari localStorage saat halaman dimuat
