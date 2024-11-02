@@ -6,7 +6,6 @@
     <title>Pelacakan Tangki BBM Truk</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"> 
     <style>
         #map {
             height: 400px;
@@ -15,20 +14,6 @@
         #dataTable {
             margin-top: 20px;
         }
-        .car-icon {
-    position: relative;
-    width: 64px; /* Ukuran yang sama dengan iconSize di JavaScript */
-    height: 64px; /* Ukuran yang sama dengan iconSize di JavaScript */
-    transform: translateZ(0); /* Membantu dengan rendering 3D */
-}
-
-.car-icon i {
-    font-size: 23px; /* Ukuran font untuk ikon */
-    color: #007cf0; /* Ubah warna ikon sesuai keinginan */
-    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); /* Menambahkan bayangan untuk efek 3D */
-    transform: rotateX(20deg); /* Memiringkan ikon sedikit untuk tampilan 3D */
-}
-
     </style>
 </head>
 <body>
@@ -70,24 +55,25 @@
             const currentDate = new Date().toLocaleDateString('id-ID', options);
             dateInfo.textContent = `Hari ini: ${currentDate}`;
         }
-    
+
         // Panggil displayDateInfo saat halaman dimuat
         displayDateInfo();
-    
+
         // DataTable Initialization
         $(document).ready(function() {
             $('#dataTable').DataTable();
         });
-    
+
         let watchId;
         let lastPosition = null;
         let totalDistance = 0;
         let totalFuelConsumed = 0;
         let map;
         let marker;
+        let intervalId;
         let saveDataInterval;
         let updateTableInterval;
-    
+
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371;
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -97,48 +83,39 @@
                       Math.sin(dLon / 2) * Math.sin(dLon / 2);
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
-    
+
         function updateLocation(position) {
             const latitude = position.coords.latitude;
             const longitude = position.coords.longitude;
             const locationInfo = document.getElementById('locationInfo');
             locationInfo.textContent = `Latitude: ${latitude.toFixed(5)}, Longitude: ${longitude.toFixed(5)}`;
-    
+
             if (lastPosition) {
                 const distance = calculateDistance(lastPosition.latitude, lastPosition.longitude, latitude, longitude);
                 totalDistance += distance;
-    
+
                 const distanceInfo = document.getElementById('distanceInfo');
                 distanceInfo.textContent = `Jarak Ditempuh: ${totalDistance.toFixed(2)} km`;
-    
+
                 const timeDiff = (position.timestamp - lastPosition.timestamp) / 1000;
                 const speed = (distance / timeDiff) * 3600;
                 document.getElementById('speedInfo').textContent = `Kecepatan: ${speed.toFixed(2)} km/jam`;
-    
+
                 const fuelConsumption = distance / 13;
                 totalFuelConsumed += fuelConsumption;
                 document.getElementById('fuelInfo').textContent = `Konsumsi BBM: ${totalFuelConsumed.toFixed(2)} liter`;
             }
-    
-            lastPosition = { latitude, longitude, timestamp: position.timestamp };
-    
-           // Mengubah marker menjadi ikon mobil
-const carIcon = L.divIcon({
-    className: 'car-icon',
-    html: '<i class="fa-solid fa-car"></i>', // Pastikan Anda menggunakan kelas ikon mobil yang benar
-    iconSize: [64, 64], // Ukuran ikon besar
-    iconAnchor: [32, 64] // Titik referensi ikon di tengah bawah
-});
 
-    
+            lastPosition = { latitude, longitude, timestamp: position.timestamp };
+
             if (marker) {
                 marker.setLatLng([latitude, longitude]);
             } else {
-                marker = L.marker([latitude, longitude], { icon: carIcon }).addTo(map);
+                marker = L.marker([latitude, longitude]).addTo(map);
             }
             map.setView([latitude, longitude], 15);
         }
-    
+
         function saveDataAutomatically() {
             const data = JSON.parse(localStorage.getItem('trackingData')) || [];
             const currentDate = new Date();
@@ -153,12 +130,12 @@ const carIcon = L.divIcon({
             data.push(newRecord);
             localStorage.setItem('trackingData', JSON.stringify(data));
         }
-    
+
         function displayDataInTable() {
             const data = JSON.parse(localStorage.getItem('trackingData')) || [];
             const table = $('#dataTable').DataTable();
             table.clear();
-    
+
             data.forEach(record => {
                 table.row.add([
                     record.time,
@@ -169,7 +146,7 @@ const carIcon = L.divIcon({
             });
             table.draw();
         }
-    
+
         function startTracking() {
             if (navigator.geolocation) {
                 map = L.map('map').setView([0, 0], 2);
@@ -177,7 +154,7 @@ const carIcon = L.divIcon({
                     maxZoom: 19,
                     attribution: '© OpenStreetMap'
                 }).addTo(map);
-    
+
                 watchId = navigator.geolocation.watchPosition(updateLocation, (error) => {
                     console.error(error);
                 }, {
@@ -185,28 +162,49 @@ const carIcon = L.divIcon({
                     maximumAge: 0,
                     timeout: 10000
                 });
-    
+
                 saveDataInterval = setInterval(saveDataAutomatically, 60000); // Menyimpan setiap 1 menit
                 updateTableInterval = setInterval(displayDataInTable, 45000); // Memperbarui tabel setiap 45 detik
             } else {
                 alert("Geolocation tidak didukung oleh browser ini.");
             }
         }
-    
+
+        function stopTracking() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+            if (saveDataInterval) {
+                clearInterval(saveDataInterval);
+                saveDataInterval = null;
+            }
+            if (updateTableInterval) {
+                clearInterval(updateTableInterval);
+                updateTableInterval = null;
+            }
+            lastPosition = null;
+            totalDistance = 0;
+            totalFuelConsumed = 0;
+            document.getElementById('distanceInfo').textContent = 'Jarak Ditempuh: 0 km';
+            document.getElementById('speedInfo').textContent = 'Kecepatan: 0 km/jam';
+            document.getElementById('fuelInfo').textContent = 'Konsumsi BBM: 0 liter';
+        }
+
         function clearData() {
             localStorage.removeItem('trackingData');
             displayDataInTable(); // Memperbarui tabel setelah penghapusan
             alert("Data telah dihapus.");
         }
-    
+
         // Hapus data dari localStorage saat halaman di-refresh
         window.addEventListener('beforeunload', function () {
             localStorage.removeItem('trackingData');
         });
-    
-        // Mulai pelacakan saat halaman dimuat
-        window.onload = startTracking;
     </script>
-    
 </body>
 </html>
