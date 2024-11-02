@@ -18,7 +18,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Pelacakan Tangki BBM Truk</h2>
+        <h2>Tracking Truk dan BBM</h2>
         <div id="locationInfo">Menunggu lokasi...</div>
         <div id="distanceInfo">Jarak Ditempuh: 0 km</div>
         <div id="speedInfo">Kecepatan: 0 km/jam</div>
@@ -126,33 +126,28 @@
                 tbody.appendChild(row);
             });
         }
-
         function startTracking() {
-            if (navigator.geolocation) {
-                map = L.map('map').setView([0, 0], 2);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '© OpenStreetMap'
-                }).addTo(map);
+    if (navigator.geolocation) {
+        map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
 
-                getCurrentLocation();
+        watchId = navigator.geolocation.watchPosition(updateLocation, (error) => {
+            console.error(error);
+        }, {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 10000
+        });
 
-                intervalId = setInterval(getCurrentLocation, 86400000);
-                saveDataInterval = setInterval(saveDataAutomatically, 60000);
-                updateTableInterval = setInterval(displayDataInTable, 45000);
-
-                watchId = navigator.geolocation.watchPosition(updateLocation, (error) => {
-                    console.error(error);
-                }, {
-                    enableHighAccuracy: true,
-                    maximumAge: 0,
-                    timeout: 10000
-                });
-            } else {
-                alert("Geolocation tidak didukung oleh browser ini.");
-            }
-        }
-
+        saveDataInterval = setInterval(saveDataAutomatically, 60000); // Menyimpan setiap 1 menit
+        updateTableInterval = setInterval(displayDataInTable, 45000); // Memperbarui tabel setiap 45 detik
+    } else {
+        alert("Geolocation tidak didukung oleh browser ini.");
+    }
+}
         function stopTracking() {
             if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
