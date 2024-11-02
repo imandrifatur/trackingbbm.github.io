@@ -26,9 +26,10 @@
         <div id="fuelInfo">Konsumsi BBM: 0 liter</div>
         <button id="startTracking" class="btn btn-secondary mt-2" onclick="startTracking()">Mulai Lacak Lokasi</button>
         <button id="stopTracking" class="btn btn-danger mt-2" onclick="stopTracking()">Hentikan Lacak Lokasi</button>
+        <button id="clearData" class="btn btn-warning mt-2" onclick="clearData()">Hapus Data</button>
 
         <div id="map"></div>
-<br>
+        <br>
         <table id="dataTable" class="table table-bordered table-hover mt-4">
             <thead class="thead-dark">
                 <tr>
@@ -193,6 +194,17 @@
             document.getElementById('speedInfo').textContent = 'Kecepatan: 0 km/jam';
             document.getElementById('fuelInfo').textContent = 'Konsumsi BBM: 0 liter';
         }
+
+        function clearData() {
+            localStorage.removeItem('trackingData');
+            displayDataInTable(); // Memperbarui tabel setelah penghapusan
+            alert("Data telah dihapus.");
+        }
+
+        // Hapus data dari localStorage saat halaman di-refresh
+        window.addEventListener('beforeunload', function () {
+            localStorage.removeItem('trackingData');
+        });
     </script>
 </body>
 </html>
