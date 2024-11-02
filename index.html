@@ -7,29 +7,8 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        h2 {
-            text-align: center;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        table {
-            margin-top: 20px;
-        }
         #map {
-            height: 400px; /* Ukuran peta */
+            height: 400px;
             margin-top: 20px;
         }
     </style>
@@ -37,40 +16,14 @@
 <body>
     <div class="container">
         <h2>Pelacakan Tangki BBM Truk</h2>
-        <form id="tankForm">
-            <div class="form-group">
-                <label for="truckId">Nomor Polisi</label>
-                <input type="text" id="truckId" class="form-control" placeholder="Masukkan Nomor Polisi Truk" required>
-            </div>
-            <div class="form-group">
-                <label for="fuelAmount">Jumlah BBM (Liter)</label>
-                <input type="number" id="fuelAmount" class="form-control" placeholder="Masukkan Jumlah BBM" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Tambah Data</button>
-        </form>
-
-        <div class="mt-4">
-            <h4>Live Location</h4>
-            <div id="locationInfo">Menunggu lokasi...</div>
-            <div id="distanceInfo">Jarak Ditempuh: 0 km</div>
-            <div id="speedInfo">Kecepatan: 0 km/jam</div>
-            <div id="fuelInfo">Konsumsi BBM: 0 liter</div>
-            <button id="startTracking" class="btn btn-secondary mt-2" onclick="startTracking()">Mulai Lacak Lokasi</button>
-            <button id="stopTracking" class="btn btn-danger mt-2" onclick="stopTracking()">Hentikan Lacak Lokasi</button>
-        </div>
+        <div id="locationInfo">Menunggu lokasi...</div>
+        <div id="distanceInfo">Jarak Ditempuh: 0 km</div>
+        <div id="speedInfo">Kecepatan: 0 km/jam</div>
+        <div id="fuelInfo">Konsumsi BBM: 0 liter</div>
+        <button id="startTracking" class="btn btn-secondary mt-2" onclick="startTracking()">Mulai Lacak Lokasi</button>
+        <button id="stopTracking" class="btn btn-danger mt-2" onclick="stopTracking()">Hentikan Lacak Lokasi</button>
 
         <div id="map"></div>
-
-        <table class="table table-bordered mt-4">
-            <thead>
-                <tr>
-                    <th>ID Truk</th>
-                    <th>Jumlah BBM (Liter)</th>
-                    <th>Aksi</th>
-                </tr>
-            </thead>
-            <tbody id="tankTableBody"></tbody>
-        </table>
     </div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -82,64 +35,18 @@
         let map;
         let marker;
         let intervalId;
+        let saveDataInterval;
 
-        // Fungsi untuk menyimpan data ke localStorage
-        function saveData() {
-            const tankData = JSON.parse(localStorage.getItem('tankData')) || [];
-            const truckId = document.getElementById('truckId').value;
-            const fuelAmount = document.getElementById('fuelAmount').value;
-            tankData.push({ truckId, fuelAmount });
-            localStorage.setItem('tankData', JSON.stringify(tankData));
-            displayData();
-        }
-
-        // Fungsi untuk menampilkan data dari localStorage ke tabel
-        function displayData() {
-            const tankData = JSON.parse(localStorage.getItem('tankData')) || [];
-            const tankTableBody = document.getElementById('tankTableBody');
-            tankTableBody.innerHTML = '';
-            tankData.forEach((data, index) => {
-                const row = `
-                    <tr>
-                        <td>${data.truckId}</td>
-                        <td>${data.fuelAmount}</td>
-                        <td>
-                            <button class="btn btn-danger btn-sm" onclick="deleteData(${index})">Hapus</button>
-                        </td>
-                    </tr>
-                `;
-                tankTableBody.innerHTML += row;
-            });
-        }
-
-        // Fungsi untuk menghapus data dari localStorage
-        function deleteData(index) {
-            const tankData = JSON.parse(localStorage.getItem('tankData'));
-            tankData.splice(index, 1);
-            localStorage.setItem('tankData', JSON.stringify(tankData));
-            displayData();
-        }
-
-        // Menangani pengiriman formulir
-        document.getElementById('tankForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            saveData();
-            this.reset(); // Reset formulir
-        });
-
-        // Fungsi untuk menghitung jarak antara dua titik
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Jari-jari bumi dalam km
+            const R = 6371;
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
             const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
                       Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
                       Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c; // Jarak dalam km
+            return R * c; 
         }
 
-        // Fungsi untuk memperbarui informasi lokasi
         function updateLocation(position) {
             const latitude = position.coords.latitude;
             const longitude = position.coords.longitude;
@@ -153,41 +60,25 @@
                 const distanceInfo = document.getElementById('distanceInfo');
                 distanceInfo.textContent = `Jarak Ditempuh: ${totalDistance.toFixed(2)} km`;
 
-                // Hitung kecepatan (km/jam)
-                const timeDiff = (position.timestamp - lastPosition.timestamp) / 1000; // dalam detik
-                const speed = (distance / timeDiff) * 3600; // kecepatan dalam km/jam
-                const speedInfo = document.getElementById('speedInfo');
-                speedInfo.textContent = `Kecepatan: ${speed.toFixed(2)} km/jam`;
+                const timeDiff = (position.timestamp - lastPosition.timestamp) / 1000;
+                const speed = (distance / timeDiff) * 3600;
+                document.getElementById('speedInfo').textContent = `Kecepatan: ${speed.toFixed(2)} km/jam`;
 
-                // Hitung konsumsi BBM
-                const fuelConsumption = distance / 13; // 1 liter untuk 13 km
+                const fuelConsumption = distance / 13;
                 totalFuelConsumed += fuelConsumption;
-
-                const fuelInfo = document.getElementById('fuelInfo');
-                fuelInfo.textContent = `Konsumsi BBM: ${totalFuelConsumed.toFixed(2)} liter`;
-
-                // Cek apakah BBM sudah habis
-                const initialFuelAmount = parseFloat(document.getElementById('fuelAmount').value);
-                if (totalFuelConsumed >= initialFuelAmount) {
-                    alert('BBM telah habis!');
-                    stopTracking();
-                }
+                document.getElementById('fuelInfo').textContent = `Konsumsi BBM: ${totalFuelConsumed.toFixed(2)} liter`;
             }
 
             lastPosition = { latitude, longitude, timestamp: position.timestamp };
 
-            // Update marker pada peta
             if (marker) {
                 marker.setLatLng([latitude, longitude]);
             } else {
                 marker = L.marker([latitude, longitude]).addTo(map);
             }
-
-            // Pindahkan peta ke posisi marker
             map.setView([latitude, longitude], 15);
         }
 
-        // Fungsi untuk mendapatkan lokasi saat ini
         function getCurrentLocation() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(updateLocation, (error) => {
@@ -202,22 +93,33 @@
             }
         }
 
-        // Fungsi untuk mulai melacak lokasi
+        function saveDataAutomatically() {
+            const data = JSON.parse(localStorage.getItem('trackingData')) || [];
+            const currentDate = new Date();
+            const newRecord = {
+                date: currentDate.toLocaleDateString(),
+                time: currentDate.toLocaleTimeString(),
+                distance: totalDistance.toFixed(2),
+                speed: parseFloat(document.getElementById('speedInfo').textContent.split(' ')[1]),
+                fuelConsumption: totalFuelConsumed.toFixed(2)
+            };
+            data.push(newRecord);
+            localStorage.setItem('trackingData', JSON.stringify(data));
+        }
+
         function startTracking() {
             if (navigator.geolocation) {
-                map = L.map('map').setView([0, 0], 2); // Atur peta ke tampilan awal
+                map = L.map('map').setView([0, 0], 2);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19,
                     attribution: '© OpenStreetMap'
                 }).addTo(map);
 
-                // Mengambil lokasi pertama
                 getCurrentLocation();
-                
-                // Memperbarui lokasi setiap 24 jam
-                intervalId = setInterval(() => {
-                    getCurrentLocation();
-                }, 86400000); // 24 jam dalam milidetik
+
+                intervalId = setInterval(getCurrentLocation, 86400000);
+
+                saveDataInterval = setInterval(saveDataAutomatically, 60000);
 
                 watchId = navigator.geolocation.watchPosition(updateLocation, (error) => {
                     console.error(error);
@@ -231,7 +133,6 @@
             }
         }
 
-        // Fungsi untuk menghentikan pelacakan lokasi
         function stopTracking() {
             if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
@@ -241,6 +142,10 @@
                 clearInterval(intervalId);
                 intervalId = null;
             }
+            if (saveDataInterval) {
+                clearInterval(saveDataInterval);
+                saveDataInterval = null;
+            }
             lastPosition = null;
             totalDistance = 0;
             totalFuelConsumed = 0;
@@ -248,9 +153,6 @@
             document.getElementById('speedInfo').textContent = 'Kecepatan: 0 km/jam';
             document.getElementById('fuelInfo').textContent = 'Konsumsi BBM: 0 liter';
         }
-
-        // Menampilkan data dari localStorage saat halaman dimuat
-        displayData();
     </script>
 </body>
 </html>
