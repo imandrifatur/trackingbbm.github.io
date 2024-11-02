@@ -11,6 +11,9 @@
             height: 400px;
             margin-top: 20px;
         }
+        #dataTable {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -24,6 +27,18 @@
         <button id="stopTracking" class="btn btn-danger mt-2" onclick="stopTracking()">Hentikan Lacak Lokasi</button>
 
         <div id="map"></div>
+
+        <table id="dataTable" class="table table-bordered table-hover mt-4">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Waktu</th>
+                    <th>Kecepatan (km/jam)</th>
+                    <th>Jarak Tempuh (km)</th>
+                    <th>Konsumsi BBM (liter)</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
     </div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -36,15 +51,16 @@
         let marker;
         let intervalId;
         let saveDataInterval;
+        let updateTableInterval;
 
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371;
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                       Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            return R * c; 
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
         function updateLocation(position) {
@@ -79,32 +95,36 @@
             map.setView([latitude, longitude], 15);
         }
 
-        function getCurrentLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(updateLocation, (error) => {
-                    console.error(error);
-                }, {
-                    enableHighAccuracy: true,
-                    maximumAge: 0,
-                    timeout: 10000
-                });
-            } else {
-                alert("Geolocation tidak didukung oleh browser ini.");
-            }
-        }
-
         function saveDataAutomatically() {
             const data = JSON.parse(localStorage.getItem('trackingData')) || [];
             const currentDate = new Date();
+            const speed = parseFloat(document.getElementById('speedInfo').textContent.split(' ')[1]);
             const newRecord = {
                 date: currentDate.toLocaleDateString(),
                 time: currentDate.toLocaleTimeString(),
                 distance: totalDistance.toFixed(2),
-                speed: parseFloat(document.getElementById('speedInfo').textContent.split(' ')[1]),
+                speed: speed,
                 fuelConsumption: totalFuelConsumed.toFixed(2)
             };
             data.push(newRecord);
             localStorage.setItem('trackingData', JSON.stringify(data));
+        }
+
+        function displayDataInTable() {
+            const data = JSON.parse(localStorage.getItem('trackingData')) || [];
+            const tbody = document.querySelector("#dataTable tbody");
+            tbody.innerHTML = '';
+
+            data.forEach(record => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${record.time}</td>
+                    <td>${record.speed} km/jam</td>
+                    <td>${record.distance} km</td>
+                    <td>${record.fuelConsumption} liter</td>
+                `;
+                tbody.appendChild(row);
+            });
         }
 
         function startTracking() {
@@ -118,8 +138,8 @@
                 getCurrentLocation();
 
                 intervalId = setInterval(getCurrentLocation, 86400000);
-
                 saveDataInterval = setInterval(saveDataAutomatically, 60000);
+                updateTableInterval = setInterval(displayDataInTable, 45000);
 
                 watchId = navigator.geolocation.watchPosition(updateLocation, (error) => {
                     console.error(error);
@@ -145,6 +165,10 @@
             if (saveDataInterval) {
                 clearInterval(saveDataInterval);
                 saveDataInterval = null;
+            }
+            if (updateTableInterval) {
+                clearInterval(updateTableInterval);
+                updateTableInterval = null;
             }
             lastPosition = null;
             totalDistance = 0;
