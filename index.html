@@ -27,7 +27,6 @@
         <button id="startTracking" class="btn btn-secondary mt-2" onclick="startTracking()">Mulai Lacak Lokasi</button>
         <button id="stopTracking" class="btn btn-danger mt-2" onclick="stopTracking()">Hentikan Lacak Lokasi</button>
         <button id="clearData" class="btn btn-warning mt-2" onclick="clearData()">Hapus Data</button>
-        <button id="startRecording" class="btn btn-primary mt-2" onclick="startAudioRecording()">Mulai Rekam Suara</button>
 
         <div id="map"></div>
         <br>
@@ -202,45 +201,10 @@
             alert("Data telah dihapus.");
         }
 
-        // Fitur perekaman suara
-        let mediaRecorder;
-        let audioChunks = [];
-
-        async function startAudioRecording() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                mediaRecorder.start();
-
-                 mediaRecorder.onstop = function() {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
-                const audioUrl = URL.createObjectURL(audioBlob);
-                const audio = new Audio(audioUrl);
-                audio.play();
-
-                // Menghapus data yang direkam setelah diputar
-                audioChunks = [];
-                alert("Perekaman selesai dan suara diputar.");
-            };
-
-            alert("Perekaman suara dimulai. Klik lagi tombol 'Mulai Rekam Suara' untuk menghentikan.");
-            document.getElementById('startRecording').textContent = 'Hentikan Rekaman';
-            document.getElementById('startRecording').onclick = stopAudioRecording;
-        } catch (error) {
-            console.error("Gagal memulai perekaman audio:", error);
-            alert("Perekaman suara tidak dapat dimulai: " + error.message);
-        }
-    }
-
-    function stopAudioRecording() {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-            document.getElementById('startRecording').textContent = 'Mulai Rekam Suara';
-            document.getElementById('startRecording').onclick = startAudioRecording;
-        } else {
-            alert("Tidak ada perekaman yang berjalan.");
-        }
-    }
-</script>
+        // Hapus data dari localStorage saat halaman di-refresh
+        window.addEventListener('beforeunload', function () {
+            localStorage.removeItem('trackingData');
+        });
+    </script>
 </body>
 </html>
