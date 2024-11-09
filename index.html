@@ -14,18 +14,12 @@
         #dataTable {
             margin-top: 20px;
         }
-        #cameraStream {
-            width: 100%;
-            height: 300px;
-            border: 1px solid black;
-            margin-top: 20px;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>Tracking Truk dan BBM</h2>
-        <div id="dateInfo" class="mb-2"></div>
+        <div id="dateInfo" class="mb-2"></div> <!-- Tempat untuk menampilkan tanggal dan hari -->
         <div id="locationInfo">Menunggu lokasi...</div>
         <div id="distanceInfo">Jarak Ditempuh: 0 km</div>
         <div id="speedInfo">Kecepatan: 0 km/jam</div>
@@ -33,11 +27,9 @@
         <button id="startTracking" class="btn btn-secondary mt-2" onclick="startTracking()">Mulai Lacak Lokasi</button>
         <button id="stopTracking" class="btn btn-danger mt-2" onclick="stopTracking()">Hentikan Lacak Lokasi</button>
         <button id="clearData" class="btn btn-warning mt-2" onclick="clearData()">Hapus Data</button>
-        
+        <button id="startRecording" class="btn btn-primary mt-2" onclick="startAudioRecording()">Mulai Rekam Suara</button>
+
         <div id="map"></div>
-        <br>
-        <video id="cameraStream" autoplay playsinline></video>
-        <button id="captureSnapshot" class="btn btn-primary mt-2">Ambil Snapshot</button>
         <br>
         <table id="dataTable" class="table table-bordered table-hover mt-4">
             <thead class="thead-dark">
@@ -65,81 +57,98 @@
             dateInfo.textContent = `Hari ini: ${currentDate}`;
         }
 
+        // Panggil displayDateInfo saat halaman dimuat
         displayDateInfo();
+
+        // DataTable Initialization
         $(document).ready(function() {
             $('#dataTable').DataTable();
         });
 
-        // Lokasi dan Pelacakan
         let watchId;
         let lastPosition = null;
         let totalDistance = 0;
         let totalFuelConsumed = 0;
-        let map, marker, saveDataInterval, updateTableInterval;
+        let map;
+        let marker;
+        let intervalId;
+        let saveDataInterval;
+        let updateTableInterval;
 
-        // Fungsi Kamera
-        const video = document.getElementById('cameraStream');
-        const startCamera = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                video.srcObject = stream;
-            } catch (err) {
-                console.error("Kesalahan akses kamera:", err);
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function updateLocation(position) {
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+            const locationInfo = document.getElementById('locationInfo');
+            locationInfo.textContent = `Latitude: ${latitude.toFixed(5)}, Longitude: ${longitude.toFixed(5)}`;
+
+            if (lastPosition) {
+                const distance = calculateDistance(lastPosition.latitude, lastPosition.longitude, latitude, longitude);
+                totalDistance += distance;
+
+                const distanceInfo = document.getElementById('distanceInfo');
+                distanceInfo.textContent = `Jarak Ditempuh: ${totalDistance.toFixed(2)} km`;
+
+                const timeDiff = (position.timestamp - lastPosition.timestamp) / 1000;
+                const speed = (distance / timeDiff) * 3600;
+                document.getElementById('speedInfo').textContent = `Kecepatan: ${speed.toFixed(2)} km/jam`;
+
+                const fuelConsumption = distance / 13;
+                totalFuelConsumed += fuelConsumption;
+                document.getElementById('fuelInfo').textContent = `Konsumsi BBM: ${totalFuelConsumed.toFixed(2)} liter`;
             }
-        };
 
-        document.getElementById('captureSnapshot').addEventListener('click', () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageData = canvas.toDataURL('image/png');
-            let snapshots = JSON.parse(localStorage.getItem('cameraSnapshots')) || [];
-            snapshots.push(imageData);
-            localStorage.setItem('cameraSnapshots', JSON.stringify(snapshots));
-            alert('Snapshot berhasil diambil dan disimpan di localStorage.');
-        });
+            lastPosition = { latitude, longitude, timestamp: position.timestamp };
 
-        startCamera();
-
-        // Fungsi Perekaman Suara
-        let mediaRecorder;
-        let chunks = [];
-
-        const startRecording = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                mediaRecorder.ondataavailable = (event) => {
-                    chunks.push(event.data);
-                };
-                mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = () => {
-                        let recordings = JSON.parse(localStorage.getItem('audioRecordings')) || [];
-                        recordings.push(reader.result);
-                        localStorage.setItem('audioRecordings', JSON.stringify(recordings));
-                        chunks = [];
-                    };
-                };
-                mediaRecorder.start();
-            } catch (err) {
-                console.error("Kesalahan akses mikrofon:", err);
+            if (marker) {
+                marker.setLatLng([latitude, longitude]);
+            } else {
+                marker = L.marker([latitude, longitude]).addTo(map);
             }
-        };
+            map.setView([latitude, longitude], 15);
+        }
 
-        const stopRecording = () => {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-            }
-        };
+        function saveDataAutomatically() {
+            const data = JSON.parse(localStorage.getItem('trackingData')) || [];
+            const currentDate = new Date();
+            const speed = parseFloat(document.getElementById('speedInfo').textContent.split(' ')[1]);
+            const newRecord = {
+                date: currentDate.toLocaleDateString(),
+                time: currentDate.toLocaleTimeString(),
+                distance: totalDistance.toFixed(2),
+                speed: speed,
+                fuelConsumption: totalFuelConsumed.toFixed(2)
+            };
+            data.push(newRecord);
+            localStorage.setItem('trackingData', JSON.stringify(data));
+        }
 
-        // Tambahkan pemanggilan fungsi perekaman saat pelacakan dimulai
+        function displayDataInTable() {
+            const data = JSON.parse(localStorage.getItem('trackingData')) || [];
+            const table = $('#dataTable').DataTable();
+            table.clear();
+
+            data.forEach(record => {
+                table.row.add([
+                    record.time,
+                    `${record.speed} km/jam`,
+                    `${record.distance} km`,
+                    `${record.fuelConsumption} liter`
+                ]);
+            });
+            table.draw();
+        }
+
         function startTracking() {
-            startRecording();
             if (navigator.geolocation) {
                 map = L.map('map').setView([0, 0], 2);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -147,25 +156,91 @@
                     attribution: '© OpenStreetMap'
                 }).addTo(map);
 
-                watchId = navigator.geolocation.watchPosition(updateLocation, console.error, {
+                watchId = navigator.geolocation.watchPosition(updateLocation, (error) => {
+                    console.error(error);
+                }, {
                     enableHighAccuracy: true,
                     maximumAge: 0,
                     timeout: 10000
                 });
 
-                saveDataInterval = setInterval(saveDataAutomatically, 60000);
-                updateTableInterval = setInterval(displayDataInTable, 45000);
+                saveDataInterval = setInterval(saveDataAutomatically, 60000); // Menyimpan setiap 1 menit
+                updateTableInterval = setInterval(displayDataInTable, 45000); // Memperbarui tabel setiap 45 detik
             } else {
                 alert("Geolocation tidak didukung oleh browser ini.");
             }
         }
 
         function stopTracking() {
-            stopRecording();
             if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
+                watchId = null;
             }
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+            if (saveDataInterval) {
+                clearInterval(saveDataInterval);
+                saveDataInterval = null;
+            }
+            if (updateTableInterval) {
+                clearInterval(updateTableInterval);
+                updateTableInterval = null;
+            }
+            lastPosition = null;
+            totalDistance = 0;
+            totalFuelConsumed = 0;
+            document.getElementById('distanceInfo').textContent = 'Jarak Ditempuh: 0 km';
+            document.getElementById('speedInfo').textContent = 'Kecepatan: 0 km/jam';
+            document.getElementById('fuelInfo').textContent = 'Konsumsi BBM: 0 liter';
         }
-    </script>
+
+        function clearData() {
+            localStorage.removeItem('trackingData');
+            displayDataInTable(); // Memperbarui tabel setelah penghapusan
+            alert("Data telah dihapus.");
+        }
+
+        // Fitur perekaman suara
+        let mediaRecorder;
+        let audioChunks = [];
+
+        async function startAudioRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.start();
+
+                 mediaRecorder.onstop = function() {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                audio.play();
+
+                // Menghapus data yang direkam setelah diputar
+                audioChunks = [];
+                alert("Perekaman selesai dan suara diputar.");
+            };
+
+            alert("Perekaman suara dimulai. Klik lagi tombol 'Mulai Rekam Suara' untuk menghentikan.");
+            document.getElementById('startRecording').textContent = 'Hentikan Rekaman';
+            document.getElementById('startRecording').onclick = stopAudioRecording;
+        } catch (error) {
+            console.error("Gagal memulai perekaman audio:", error);
+            alert("Perekaman suara tidak dapat dimulai: " + error.message);
+        }
+    }
+
+    function stopAudioRecording() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            document.getElementById('startRecording').textContent = 'Mulai Rekam Suara';
+            document.getElementById('startRecording').onclick = startAudioRecording;
+        } else {
+            alert("Tidak ada perekaman yang berjalan.");
+        }
+    }
+</script>
 </body>
 </html>
